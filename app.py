@@ -21,6 +21,19 @@ users = [
     {"id": 2, "name": "Bob", "age": 30},
 ]
 
+#setting up in memory database of tasks 
+tasks = [
+    {"id":1, "title": "Learn REST", "description": "Study REST principles", "user_id" : 1, "completed": True},
+     {"id":2, "title": "Build API", "description": "Complete the assigment", "user_id" : 2, "completed": False}
+]
+
+
+#helper function to check if the user exists
+
+def user_exists(user_id):
+    """Check if a user exists by ID. """
+    return any(user['id']== user_id for user in users)
+
 # Define route to handle requests to the root URL ('/')
 @app.route('/')
 def index():
@@ -97,6 +110,114 @@ def delete_user(user_id):
     # Rebuild the users list, excluding the user with the specified ID
     users = [user for user in users if user['id'] != user_id]
     return '', 204  # 204 is the HTTP status code for 'No Content', indicating the deletion was successful
+
+
+
+#configuring the paths for tasks 
+
+@app.route('/tasks', methods=['GET'])
+def get_tasks():
+    """Retrieve all tasks."""
+    return jsonify(tasks), 200
+
+
+
+#get single task by id endpoint 
+
+@app.route('/tasks/<int:task_id>', methods=['GET'])
+def get_task(task_id):
+    """Retrieve a single task by ID."""
+    task = next((task for task in tasks if task['id'] == task_id), None)
+    if task is None:
+        abort(404, description="Task not found")
+    return jsonify(task), 200
+
+#configuring POST endpoint with validation on every field 
+
+@app.route('/tasks', methods=['POST'])
+def create_task():
+    """Create a new task."""
+    # Validate if medium is JSON
+    if not request.json:
+        abort(400, description="Invalid or missing JSON")
+    
+    # Validate required fields
+    if 'title' not in request.json:
+        abort(400, description="Missing required field: title")
+    if 'user_id' not in request.json:
+        abort(400, description="Missing required field: user_id")
+    
+    # Validate user_id exists
+    user_id = request.json['user_id']
+    if not user_exists(user_id):
+        abort(400, description=f"User with ID {user_id} does not exist")
+    
+    # Create new task
+    new_task = {
+        'id': tasks[-1]['id'] + 1 if tasks else 1,
+        'title': request.json['title'],
+        'description': request.json.get('description', ''),
+        'user_id': user_id,
+        'completed': request.json.get('completed', False)
+    }
+    
+    tasks.append(new_task)
+    return jsonify(new_task), 201
+
+
+#implementing the PUT endpoint for tasks 
+
+@app.route('/tasks/<int:task_id>', methods=['PUT'])
+def update_task(task_id):
+    """Update an existing task."""
+    # Find task
+    task = next((task for task in tasks if task['id'] == task_id), None)
+    if task is None:
+        abort(404, description="Task not found")
+    
+    # Validate JSON
+    if not request.json:
+        abort(400, description="Invalid or missing JSON")
+    
+    # Validate user_id if provided
+    if 'user_id' in request.json:
+        if not user_exists(request.json['user_id']):
+            abort(400, description=f"User with ID {request.json['user_id']} does not exist")
+    
+    # Update fields
+    task['title'] = request.json.get('title', task['title'])
+    task['description'] = request.json.get('description', task['description'])
+    task['user_id'] = request.json.get('user_id', task['user_id'])
+    task['completed'] = request.json.get('completed', task['completed'])
+    
+    return jsonify(task), 200
+
+#implementing the DELETE endpoint for tasks
+@app.route('/tasks/<int:task_id>', methods=['DELETE'])
+def delete_task(task_id):
+    """Delete a task."""
+    global tasks
+    
+    # Check if task exists
+    task = next((task for task in tasks if task['id'] == task_id), None)
+    if task is None:
+        abort(404, description="Task not found")
+    
+    # Remove task
+    tasks = [task for task in tasks if task['id'] != task_id]
+    return '', 204
+#implementing the user-tasks endpointto get all tasks for specific user
+@app.route('/users/<int:user_id>/tasks', methods=['GET'])
+def get_user_tasks(user_id):
+    """Retrieve all tasks for a specific user."""
+    # Check if user exists
+    if not user_exists(user_id):
+        abort(404, description="User not found")
+    
+    # Find tasks for this user
+    user_tasks = [task for task in tasks if task['user_id'] == user_id]
+    return jsonify(user_tasks), 200
+
 
 # Entry point for running the Flask app
 # The app will run on host 0.0.0.0 (accessible on all network interfaces) and port 8000.
